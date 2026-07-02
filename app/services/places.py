@@ -78,3 +78,29 @@ async def add_place_to_project_service(
     return db_place
 
 
+async def get_project_places_service(db: AsyncSession, project_id: int) -> list[ProjectPlace] | None:
+    """
+    Retrieve all registered places associated with a specific travel project.
+
+    First verifies if the parent project exists. If it is present, extracts and
+    returns its internal list of places.
+
+    Args:
+        db (AsyncSession): The active database operational session.
+        project_id (int): The unique primary key identifier of the parent project.
+
+    Returns:
+        Optional[List[ProjectPlace]]: A list of populated place model instances
+            linked to the project, or None if the project profile does not exist.
+
+    Raises:
+        Exception: If the database execution query fails during project retrieval.
+    """
+    # Reuse the read function that already loads the project and its nested places
+    db_project = await get_project_by_id(db, project_id)
+    if not db_project:
+        return None
+
+    return list(db_project.places)
+
+
