@@ -1,0 +1,20 @@
+# Виртуальное окружение
+.venv/
+venv/
+
+# Кэш Python
+__pycache__/
+*.py[cod]
+
+# База данных SQLite
+*.db
+*.sqlite
+*.sqlite3
+
+# Локальные переменные окружения и секреты
+.env
+
+# Настройки IDE и ОС
+.idea/
+.vscode/
+.DS_Store
