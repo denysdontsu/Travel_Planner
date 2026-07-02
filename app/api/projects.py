@@ -80,3 +80,33 @@ async def get_project_endpoint(
             detail=f"Travel project with ID {project_id} not found."
         )
     return project
+
+
+@router.get(
+    "/",
+    response_model=list[ProjectResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Get all travel projects",
+    description="Retrieves a list of all travel projects along with their associated places, supporting pagination."
+)
+async def get_all_projects_endpoint(
+    db: db_dependency,
+    skip: int = Query(default=0, ge=0, description="Number of records to skip for pagination"),
+    limit: int = Query(default=100, ge=1, le=100, description="Maximum number of records to return")
+) -> list[ProjectResponse]:
+    """
+    Expose the HTTP GET endpoint to retrieve all travel projects.
+
+    Delegates the query execution to the consolidated service layer and
+    returns a list of projects serialized into the ProjectResponse schema.
+
+    Args:
+        skip (int): Injected query parameter for pagination offset.
+        limit (int): Injected query parameter for pagination limit.
+        db (AsyncSession): Injected database operational session dependency.
+
+    Returns:
+        List[ProjectResponse]: A list of structured API response dictionaries
+            representing travel projects.
+    """
+    return await get_all_projects(db, skip=skip, limit=limit) # type: ignore

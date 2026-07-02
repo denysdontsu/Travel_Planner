@@ -89,3 +89,33 @@ async def get_project_by_id(db: AsyncSession, project_id: int) -> TravelProject 
     )
     result = await db.execute(query)
     return result.scalar_one_or_none()
+
+
+async def get_all_projects(db: AsyncSession, skip: int = 0, limit: int = 100) -> list[TravelProject]:
+    """
+    Retrieve a list of all travel projects with their associated places.
+
+    Uses eager loading (selectinload) to fetch related places efficiently
+    in a single database round-trip, preventing lazy evaluation errors.
+
+    Args:
+        db (AsyncSession): The active database session.
+        skip (int): The number of project records to skip (for pagination).
+            Defaults to 0.
+        limit (int): The maximum number of project records to return.
+            Defaults to 100.
+
+    Returns:
+        list[TravelProject]: A list of populated travel project model instances.
+
+    Raises:
+        Exception: If the database execution query fails.
+    """
+    query = (
+        select(TravelProject)
+        .options(selectinload(TravelProject.places))
+        .offset(skip)
+        .limit(limit)
+    )
+    result = await db.execute(query)
+    return list(result.scalars().all())
