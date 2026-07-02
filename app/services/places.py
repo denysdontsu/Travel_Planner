@@ -1,5 +1,6 @@
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.models import ProjectPlace
 from app.schemas import PlaceCreateInput
@@ -104,3 +105,35 @@ async def get_project_places_service(db: AsyncSession, project_id: int) -> list[
     return list(db_project.places)
 
 
+async def get_project_place_by_id_service(
+    db: AsyncSession,
+    project_id: int,
+    place_id: int
+) -> ProjectPlace | None:
+    """
+    Fetch a single specific place linked to a designated travel project.
+
+    Ensures data scope integrity by filtering the query using both the
+    parent project identifier and the primary key of the target place.
+
+    Args:
+        db (AsyncSession): The active database operational session.
+        project_id (int): The unique identifier of the parent travel project.
+        place_id (int): The unique database primary key of the target place.
+
+    Returns:
+        Optional[ProjectPlace]: The discovered place model instance, or None
+            if no match is found under the specified project scope.
+
+    Raises:
+        Exception: If the database execution query fails.
+    """
+    query = (
+        select(ProjectPlace)
+        .where(
+            ProjectPlace.id == place_id,
+            ProjectPlace.project_id == project_id
+        )
+    )
+    result = await db.execute(query)
+    return result.scalar_one_or_none()

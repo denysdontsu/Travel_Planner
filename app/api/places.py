@@ -2,7 +2,8 @@ from fastapi import HTTPException, status, APIRouter
 
 from app.core.database import db_dependency
 from app.schemas import PlaceResponse, PlaceCreateInput
-from app.services.places import add_place_to_project_service, get_project_places_service
+from app.services.places import add_place_to_project_service, get_project_places_service, \
+    get_project_place_by_id_service
 
 router = APIRouter(prefix="/projects", tags=["Projects"]) # такой роутрер
 
@@ -87,3 +88,46 @@ async def get_project_places_endpoint(
 
     # Explicit conversion to satisfy static type checkers / linters completely
     return [PlaceResponse.model_validate(p) for p in places]
+
+
+@router.get(
+    "/{project_id}/places/{place_id}",
+    response_model=PlaceResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get a specific place by ID within a project",
+    description="Fetches a single verified museum place entry belonging strictly to the designated travel project."
+)
+async def get_project_place_endpoint(
+    project_id: int,
+    place_id: int,
+    db: db_dependency
+):
+    """
+    Expose the HTTP GET endpoint to view a specific place inside a travel project.
+
+    Routes parameter constraints down to the combined service layer. If the resource
+    is located and matches the project boundary, it returns a serialized profile;
+    otherwise, it throws a 404 error.
+
+    Args:
+        project_id (int): The path parameter containing the parent project ID.
+        place_id (int): The path parameter containing the target place ID.
+        db (AsyncSession): Injected database operational session dependency.
+
+    Returns:
+        PlaceResponse: A structured representation of the discovered place profile.
+
+    Raises:
+        HTTPException:
+            - 404 Not Found: If the place does not exist or does not belong to the
+              specified travel project.
+    """
+    place = await get_project_place_by_id_service(db, project_id, place_id)
+    if not place:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Place with ID {place_id} not found within travel project {project_id}."
+        )
+
+    # Explicit conversion to satisfy static type checkers / linters completely
+    return PlaceResponse.model_validate(place)
