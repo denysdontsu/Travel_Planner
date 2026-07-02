@@ -2,7 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.schemas import ProjectCreate
+from app.schemas import ProjectCreate, ProjectUpdate
 from app.models import TravelProject, ProjectPlace
 from app.services.artic_api import check_place_exists
 
@@ -119,3 +119,51 @@ async def get_all_projects(db: AsyncSession, skip: int = 0, limit: int = 100) ->
     )
     result = await db.execute(query)
     return list(result.scalars().all())
+
+
+async def update_travel_project_service(
+    db: AsyncSession,
+    project_id: int,
+    project_in: ProjectUpdate
+) -> TravelProject | None:
+    """
+    Update the metadata of an existing travel project.
+
+    Fetches the project record by its ID, modifies its baseline attributes
+    (name, description, start_date) based on the provided update schema,
+    and persists the modifications into the database.
+
+    Args:
+        db (AsyncSession): The active database operational session.
+        project_id (int): The unique primary key identifier of the project.
+        project_in (ProjectUpdate): The validated data schema containing the
+            updated attributes for the project.
+
+    Returns:
+        Optional[TravelProject]: The updated database model instance with fresh
+            attributes, or None if the project does not exist.
+
+    Raises:
+        HTTPException:
+            - 500 Internal Server Error: If a database mapping or execution anomaly
+              occurs during the flush or commit phase.
+    """
+    # 1. Fetch the existing project using our defined read helper
+    db_project = await get_project_by_id(db, project_id)
+    if not db_project:
+        return None
+
+    # 2. Extract explicitly provided fields and update the ORM model attributes
+    update_data = project_in.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_project, field, value)
+
+    # 3. Commit the changes atomically
+    await db.commit()
+
+    stmt = select(TravelProject).where(
+        TravelProject.id == db_project.id
+    ).options(selectinload(TravelProject.places))
+    result = await db.execute(stmt)
+
+    return result.scalar_one()

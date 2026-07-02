@@ -1,8 +1,9 @@
 from fastapi import APIRouter, status, HTTPException, Query
 
 from app.core.database import db_dependency
-from app.schemas import ProjectCreate, ProjectResponse
-from app.services.projects import create_travel_project_service, get_project_by_id, get_all_projects
+from app.schemas import ProjectCreate, ProjectResponse, ProjectUpdate
+from app.services.projects import create_travel_project_service, get_project_by_id, get_all_projects, \
+    update_travel_project_service
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -110,3 +111,44 @@ async def get_all_projects_endpoint(
             representing travel projects.
     """
     return await get_all_projects(db, skip=skip, limit=limit) # type: ignore
+
+
+@router.put(
+    "/{project_id}",
+    response_model=ProjectResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update a travel project",
+    description="Updates the primary metadata (name, description, start_date) of an existing travel project."
+)
+async def update_project_endpoint(
+        project_id: int,
+        project_in: ProjectUpdate,
+        db: db_dependency
+):
+    """
+    Expose the HTTP PUT endpoint to modify an active travel project.
+
+    Routes the request payload down to the consolidated service layer. If the
+    resource exists and updates successfully, it returns the updated profile;
+    otherwise, it triggers a 404 Not Found response.
+
+    Args:
+        project_id (int): The path parameter containing the targeted project ID.
+        project_in (ProjectUpdate): Injected JSON request body payload matching
+            the modification requirements.
+        db (AsyncSession): Injected database operational session dependency.
+
+    Returns:
+        ProjectResponse: A strictly validated API response schema tracking the
+            modified project profile.
+
+    Raises:
+        HTTPException:
+            - 404 Not Found: If no travel project matches the given identifier.
+            - 500 Internal Server Error: Propagated directly from the internal execution layer.
+    """
+    updated_project = await update_travel_project_service(db, project_id, project_in)
+    if not updated_project:
+        raise HTTPException(status_code=404, detail=f"Travel project with ID {project_id} not found.")
+
+    return updated_project
