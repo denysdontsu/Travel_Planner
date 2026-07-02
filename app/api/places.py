@@ -1,9 +1,9 @@
 from fastapi import HTTPException, status, APIRouter
 
 from app.core.database import db_dependency
-from app.schemas import PlaceResponse, PlaceCreateInput
+from app.schemas import PlaceResponse, PlaceCreateInput, PlaceUpdate
 from app.services.places import add_place_to_project_service, get_project_places_service, \
-    get_project_place_by_id_service
+    get_project_place_by_id_service, update_project_place_service
 
 router = APIRouter(prefix="/projects", tags=["Projects"]) # такой роутрер
 
@@ -131,3 +131,48 @@ async def get_project_place_endpoint(
 
     # Explicit conversion to satisfy static type checkers / linters completely
     return PlaceResponse.model_validate(place)
+
+
+@router.patch(
+    "/{project_id}/places/{place_id}",
+    response_model=PlaceResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Partially update a place within a project",
+    description="Updates the notes, visitation status, or both for a specific place assigned to a project."
+)
+async def update_project_place_endpoint(
+    project_id: int,
+    place_id: int,
+    place_in: PlaceUpdate,
+    db: db_dependency
+):
+    """
+    Expose the HTTP PATCH endpoint to modify attributes of an allocated place.
+
+    Passes payload deltas down to the service layer. Returns the refreshed state
+    on transactional validation or triggers a 404 error if boundaries are breached.
+
+    Args:
+        project_id (int): The path parameter containing the parent project ID.
+        place_id (int): The path parameter containing the targeted place ID.
+        place_in (PlaceUpdateInput): Injected JSON request body payload holding updates.
+        db (AsyncSession): Injected database operational session dependency.
+
+    Returns:
+        PlaceResponse: A strictly validated representation of the modified place profile.
+
+    Raises:
+        HTTPException:
+            - 404 Not Found: If the place does not exist or does not belong to the
+              specified travel project.
+            - 500 Internal Server Error: Propagated directly from the internal layer.
+    """
+    updated_place = await update_project_place_service(db, project_id, place_id, place_in)
+    if not updated_place:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Place with ID {place_id} not found within travel project {project_id}."
+        )
+
+    # Explicit conversion to satisfy static type checkers / linters completely
+    return PlaceResponse.model_validate(updated_place)

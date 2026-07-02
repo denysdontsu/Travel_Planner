@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.models import ProjectPlace
-from app.schemas import PlaceCreateInput
+from app.schemas import PlaceCreateInput, PlaceUpdate
 from app.services.artic_api import check_place_exists
 from app.services.projects import get_project_by_id
 
@@ -137,3 +137,46 @@ async def get_project_place_by_id_service(
     )
     result = await db.execute(query)
     return result.scalar_one_or_none()
+
+
+async def update_project_place_service(
+    db: AsyncSession,
+    project_id: int,
+    place_id: int,
+    place_in: PlaceUpdate
+) -> ProjectPlace | None:
+    """
+    Partially update a specific place's attributes (notes and/or is_visited status).
+
+    Leverages the existing scoping service to ensure the place belongs to the designated
+    project, then applies delta changes without erasing unset fields.
+
+    Args:
+        db (AsyncSession): The active database operational session.
+        project_id (int): The unique identifier of the parent travel project.
+        place_id (int): The unique database primary key of the target place.
+        place_in (PlaceUpdate): The validated input Pydantic schema containing
+            optional changes for notes and is_visited fields.
+
+    Returns:
+        Optional[ProjectPlace]: The updated database ORM model instance,
+            or None if the resource is not found within the specified project boundary.
+
+    Raises:
+        HTTPException:
+            - 500 Internal Server Error: If a database error occurs during the commit process.
+    """
+    # 1. Reuse existing scoped service to check existence and project alignment
+    db_place = await get_project_place_by_id_service(db, project_id, place_id)
+    if not db_place:
+        return None
+
+    # 2. Extract explicitly provided fields to support partial updates (PATCH)
+    update_data = place_in.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_place, field, value)
+
+    # 3. Persist modifications atomically
+    await db.commit()
+    await db.refresh(db_place)
+    return db_place
