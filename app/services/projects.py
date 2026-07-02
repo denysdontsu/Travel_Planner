@@ -62,3 +62,30 @@ async def create_travel_project_service(db: AsyncSession, project_in: ProjectCre
 
     result = await db.execute(stmt)
     return result.scalar_one()
+
+
+async def get_project_by_id(db: AsyncSession, project_id: int) -> TravelProject | None:
+    """
+    Fetch a single travel project by its database identifier.
+
+    Utilizes eager loading (selectinload) to efficiently pull all associated
+    places in a single query execution, preventing lazy loading errors.
+
+    Args:
+        db (AsyncSession): The active database session.
+        project_id (int): The unique database primary key of the project.
+
+    Returns:
+        Optional[TravelProject]: The populated database model instance if found,
+            otherwise None.
+
+    Raises:
+        Exception: If the database execution query fails.
+    """
+    query = (
+        select(TravelProject)
+        .where(TravelProject.id == project_id)
+        .options(selectinload(TravelProject.places))
+    )
+    result = await db.execute(query)
+    return result.scalar_one_or_none()

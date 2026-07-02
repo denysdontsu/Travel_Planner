@@ -42,3 +42,41 @@ async def create_new_project(
               is temporarily unavailable.
     """
     return await create_travel_project_service(db, project_in)
+
+
+@router.get(
+    "/{project_id}",
+    response_model=ProjectResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get a travel project by ID",
+    description="Fetches a single travel project profile along with all its associated places."
+)
+async def get_project_endpoint(
+    project_id: int,
+    db: db_dependency
+):
+    """
+    Expose the HTTP GET endpoint to retrieve a specific travel project.
+
+    Queries the database via the service layer. If the project is discovered,
+    it is serialized into a ProjectResponse schema; otherwise, a 404 error is raised.
+
+    Args:
+        project_id (int): The path parameter containing the unique project ID.
+        db (AsyncSession): Injected database operational session dependency.
+
+    Returns:
+        ProjectResponse: A structured API response matching the project profile
+            and its nested places.
+
+    Raises:
+        HTTPException:
+            - 404 Not Found: If no project exists with the provided identifier.
+    """
+    project = await get_project_by_id(db, project_id)
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Travel project with ID {project_id} not found."
+        )
+    return project
