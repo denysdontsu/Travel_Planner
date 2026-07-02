@@ -3,7 +3,7 @@ from fastapi import APIRouter, status, HTTPException, Query
 from app.core.database import db_dependency
 from app.schemas import ProjectCreate, ProjectResponse, ProjectUpdate
 from app.services.projects import create_travel_project_service, get_project_by_id, get_all_projects, \
-    update_travel_project_service
+    update_travel_project_service, delete_travel_project_service
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -152,3 +152,40 @@ async def update_project_endpoint(
         raise HTTPException(status_code=404, detail=f"Travel project with ID {project_id} not found.")
 
     return updated_project
+
+
+@router.delete(
+    "/{project_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a travel project",
+    description="Deletes a specific travel project profile by its ID. Fails if any place inside the project is marked as visited."
+)
+async def delete_project_endpoint(
+    project_id: int,
+    db: db_dependency
+):
+    """
+    Expose the HTTP DELETE endpoint to remove a travel project.
+
+    Routes the request down to the service layer. Returns a clean 204 No Content status
+    on structural success, otherwise handles 404 and 400 validation anomalies.
+
+    Args:
+        project_id (int): The path parameter containing the targeted project ID.
+        db (AsyncSession): Injected database operational session dependency.
+
+    Returns:
+        None (Returns HTTP 204 No Content upon successful transaction execution).
+
+    Raises:
+        HTTPException:
+            - 404 Not Found: If the target travel project does not exist.
+            - 400 Bad Request: Propagated from the service layer if visited places exist.
+            - 500 Internal Server Error: Propagated directly from the internal layer.
+    """
+    success = await delete_travel_project_service(db, project_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Travel project with ID {project_id} not found."
+        )

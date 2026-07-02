@@ -167,3 +167,43 @@ async def update_travel_project_service(
     result = await db.execute(stmt)
 
     return result.scalar_one()
+
+
+async def delete_travel_project_service(db: AsyncSession, project_id: int) -> bool:
+    """
+    Handle the logical validation and physical deletion of a travel project.
+
+    Enforces the core business constraint: a travel project cannot be deleted
+    if any of its associated places have already been marked as visited.
+
+    Args:
+        db (AsyncSession): The active database operational session.
+        project_id (int): The unique primary key identifier of the project.
+
+    Returns:
+        bool: True if the project was found and successfully deleted, False
+            if the target project does not exist.
+
+    Raises:
+        HTTPException:
+            - 400 Bad Request: If the project contains one or more places
+              marked as visited.
+            - 500 Internal Server Error: If a database mapping or processing anomaly
+              occurs during execution.
+    """
+    # 1. Fetch the project along with its related places loaded via selectinload
+    db_project = await get_project_by_id(db, project_id)
+    if not db_project:
+        return False
+
+    # 2. Enforce business rule: Block deletion if any assigned place is visited
+    if any(place.is_visited for place in db_project.places):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete the project because at least one place has been marked as visited."
+        )
+
+    # 3. Perform atomic deletion
+    await db.delete(db_project)
+    await db.commit()
+    return True
