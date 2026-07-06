@@ -1,3 +1,4 @@
+from asyncio import gather
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -10,8 +11,9 @@ async def create_travel_project_service(db: AsyncSession, project_in: ProjectCre
     """
     Create a new travel project with optional pre-validated places.
 
-    Validates each place against the Art Institute of Chicago API before
-    persisting. All places are inserted atomically with the project.
+    Validates each place in parallel against the Art Institute of Chicago API
+    before persisting. If any place is not found, returns all invalid IDs at once.
+    All valid places are inserted atomically with the project.
 
     Args:
         db: Active async database session.
@@ -22,23 +24,32 @@ async def create_travel_project_service(db: AsyncSession, project_in: ProjectCre
         Newly created TravelProject ORM instance with places loaded.
 
     Raises:
-        HTTPException 404: If any place ID is not found in the Art Institute API.
+        HTTPException 404: If any place IDs are not found in the Art Institute API.
+            Returns all invalid IDs in a single response.
         SQLAlchemyError: If the database transaction fails.
     """
-    validated_places = []
-    if project_in.places:
-        for place in project_in.places:
-            external_place = await check_place_exists(place.external_place_id)
-            if not external_place:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Place '{place.external_place_id}' not found in Art Institute API."
-                )
-            validated_places.append({
-                "external_place_id": place.external_place_id,
-                "place_name": external_place["title"],
-                "notes": place.notes
-            })
+    results = await gather(
+        *[check_place_exists(place.external_place_id) for place in project_in.places]
+    )
+
+    invalid_ids = []
+    for place, result in zip(project_in.places, results):
+        if isinstance(result, Exception) or result is None:
+            invalid_ids.append(place.external_place_id)
+
+    if invalid_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Places not found in Art Institute API: {invalid_ids}"
+        )
+
+    validated_places = [
+        {
+            'external_place_id': place.external_place_id,
+            'place_name': api_result['title'],
+            'notes': place.notes
+        } for place, api_result in zip(project_in.places, results)
+    ]
 
     db_project = TravelProject(
         name=project_in.name,

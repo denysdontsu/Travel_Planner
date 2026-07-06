@@ -36,9 +36,9 @@ async def create_new_project(
     Raises:
         HTTPException:
             - 400 Bad Request: If the request violates business rules
-              (e.g. too many places or invalid external place IDs).
-            - 500 Internal Server Error: If the project cannot be
-              persisted due to a database error.
+              (e.g. too many places or duplicate external place IDs).
+            - 404 Not Found: If any external place IDs are not found
+              in the Art Institute API.
             - 503 Service Unavailable: If the external Art Institute API
               is temporarily unavailable.
     """
